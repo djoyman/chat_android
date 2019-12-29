@@ -4,7 +4,9 @@ import android.app.Activity;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.ProgressDialog;
+import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Build;
@@ -14,6 +16,9 @@ import android.os.Parcelable;
 import android.provider.MediaStore;
 import android.util.Log;
 import android.view.KeyEvent;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
@@ -22,13 +27,8 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Toast;
 
-import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
-import com.google.android.gms.tasks.OnCompleteListener;
-import com.google.android.gms.tasks.Task;
-import com.google.firebase.iid.FirebaseInstanceId;
-import com.google.firebase.iid.InstanceIdResult;
 import com.google.firebase.messaging.FirebaseMessaging;
 
 import java.io.File;
@@ -41,12 +41,16 @@ public class MainActivity extends AppCompatActivity {
     private static final int FILECHOOSER_RESULTCODE = 1;
     private static final String TAG = MainActivity.class.getSimpleName();
     private static final String ROOM_ID = "room1";
+    private static final String APP_PREFERENCES = "settings";
+    private static final String APP_PREF_NOTIFICATION_ENABLE = "notificationEnable";
+    private static final String APP_PREF_LOG_IN = "logIn";
     private WebView webView;
     private WebSettings webSettings;
     private ValueCallback<Uri> mUploadMessage;
     private Uri mCapturedImageURI = null;
     private ValueCallback<Uri[]> mFilePathCallback;
     private String mCameraPhotoPath;
+
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
@@ -122,36 +126,20 @@ public class MainActivity extends AppCompatActivity {
             NotificationManager notificationManager =
                     getSystemService(NotificationManager.class);
             notificationManager.createNotificationChannel(new NotificationChannel(channelId,
-                    ROOM_ID, NotificationManager.IMPORTANCE_LOW));
+                    ROOM_ID, NotificationManager.IMPORTANCE_DEFAULT));
         }
-        
-        if (getIntent().getExtras() != null) {
-            for (String key : getIntent().getExtras().keySet()) {
-                Object value = getIntent().getExtras().get(key);
-                Log.d(TAG, "Key: " + key + " Value: " + value);
-            }
-        }
-
-        subscribeToRoom();
-        showToken();
     }
-    private void subscribeToRoom() {
-        FirebaseMessaging.getInstance().subscribeToTopic(ROOM_ID);
+    private void updateNotificationsSubscription() {
+        SharedPreferences sharedPref = getSharedPreferences();
+        boolean enabled = sharedPref.getBoolean(APP_PREF_NOTIFICATION_ENABLE, true);
+        boolean inSystem = sharedPref.getBoolean(APP_PREF_LOG_IN, false);
+        if (enabled && inSystem)
+            FirebaseMessaging.getInstance().subscribeToTopic(ROOM_ID);
+        else
+            FirebaseMessaging.getInstance().unsubscribeFromTopic(ROOM_ID);
     }
-    private void showToken() {
-        FirebaseInstanceId.getInstance().getInstanceId()
-                .addOnCompleteListener(new OnCompleteListener<InstanceIdResult>() {
-                    @Override
-                    public void onComplete(@NonNull Task<InstanceIdResult> task) {
-                        if (!task.isSuccessful()) {
-                            Log.w(TAG, "getInstanceId failed", task.getException());
-                            return;
-                        }
-                        String token = task.getResult().getToken();
-                        Log.d(TAG, token);
-                        Toast.makeText(MainActivity.this, token, Toast.LENGTH_SHORT).show();
-                    }
-                });
+    private SharedPreferences getSharedPreferences() {
+        return this.getSharedPreferences(APP_PREFERENCES, Context.MODE_PRIVATE);
     }
     private File createImageFile() throws IOException {
         // Create an image file name
@@ -303,6 +291,15 @@ public class MainActivity extends AppCompatActivity {
             } catch (Exception exception) {
                 exception.printStackTrace();
             }
+
+            boolean urlContainsRoom = url.contains("/room/" + ROOM_ID);
+            if (urlContainsRoom || url.contains("/banned") || url.contains("/login")) {
+                SharedPreferences sharedPref = getSharedPreferences();
+                SharedPreferences.Editor editor = sharedPref.edit();
+                editor.putBoolean(APP_PREF_LOG_IN, urlContainsRoom);
+                editor.apply();
+                updateNotificationsSubscription();
+            }
         }
     }
     @Override
@@ -311,6 +308,35 @@ public class MainActivity extends AppCompatActivity {
             webView.goBack();
         } else {
             super.onBackPressed();
+        }
+    }
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        MenuInflater inflater = getMenuInflater();
+        inflater.inflate(R.menu.main_menu, menu);
+        return true;
+    }
+    @Override
+    public boolean onPrepareOptionsMenu(Menu menu) {
+        MenuItem notificationEnabledItem = menu.findItem(R.id.action_notification_enable);
+        SharedPreferences sharedPref = getSharedPreferences();
+        notificationEnabledItem.setChecked(sharedPref.getBoolean(APP_PREF_NOTIFICATION_ENABLE, true));
+        return true;
+    }
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        switch (item.getItemId()) {
+            case R.id.action_notification_enable:
+                boolean isChecked = !item.isChecked();
+                item.setChecked(isChecked);
+                SharedPreferences sharedPref = getSharedPreferences();
+                SharedPreferences.Editor editor = sharedPref.edit();
+                editor.putBoolean(APP_PREF_NOTIFICATION_ENABLE, isChecked);
+                editor.apply();
+                updateNotificationsSubscription();
+                return true;
+            default:
+                return super.onOptionsItemSelected(item);
         }
     }
 }
