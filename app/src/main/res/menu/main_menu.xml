@@ -5,5 +5,5 @@
         android:id="@+id/action_notification_enable"
         android:title="@string/notification_enable"
         android:checkable="true"
-        app:showAsAction="never"/>
+        app:showAsAction="always"/>
 </menu>

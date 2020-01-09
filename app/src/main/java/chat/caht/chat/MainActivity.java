@@ -318,9 +318,10 @@ public class MainActivity extends AppCompatActivity {
     }
     @Override
     public boolean onPrepareOptionsMenu(Menu menu) {
-        MenuItem notificationEnabledItem = menu.findItem(R.id.action_notification_enable);
+        MenuItem notificationsItem = menu.findItem(R.id.action_notification_enable);
         SharedPreferences sharedPref = getSharedPreferences();
-        notificationEnabledItem.setChecked(sharedPref.getBoolean(APP_PREF_NOTIFICATION_ENABLE, true));
+        notificationsItem.setChecked(sharedPref.getBoolean(APP_PREF_NOTIFICATION_ENABLE, true));
+        notificationsItem.setIcon(notificationsItem.isChecked() ? R.drawable.ic_notifications_on : R.drawable.ic_notifications_off);
         return true;
     }
     @Override
@@ -329,6 +330,7 @@ public class MainActivity extends AppCompatActivity {
             case R.id.action_notification_enable:
                 boolean isChecked = !item.isChecked();
                 item.setChecked(isChecked);
+                item.setIcon(isChecked? R.drawable.ic_notifications_on : R.drawable.ic_notifications_off);
                 SharedPreferences sharedPref = getSharedPreferences();
                 SharedPreferences.Editor editor = sharedPref.edit();
                 editor.putBoolean(APP_PREF_NOTIFICATION_ENABLE, isChecked);
